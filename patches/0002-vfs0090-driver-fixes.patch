@@ -1,0 +1,17 @@
+--- a/vfs0090.c
++++ b/vfs0090.c
+@@ -20,6 +20,7 @@
+ 
+ #define FP_COMPONENT "vfs009x"
+ 
++#include <config.h>
+ #include "drivers_api.h"
+ 
+ #include <errno.h>
+@@ -3154,4 +3155,6 @@
+   dev_class->identify = dev_activate;
+   dev_class->capture = dev_activate;
+   dev_class->cancel = dev_cancel;
++
++  fpi_device_class_auto_initialize_features (dev_class);
+ }
