@@ -117,20 +117,20 @@ already wires to `pam_fprintd.so`.
 Your enrolled fingerprints (`/var/lib/fprint`) are untouched by either
 script.
 
-## Known rough edges
+## Falling back to your password
 
-**No obvious way to fall back to typing your password.** `system-auth`'s
-`auth` stack has `pam_fprintd.so` as `sufficient` *before* `pam_unix.so`
-(also `sufficient`), which is the textbook-correct order for "try
-fingerprint, fall back to password on failure" — and this is confirmed
-identical for `sudo` and the polkit "authenticate to make changes"
-dialogs (both include `system-auth`). In practice, though, neither
-pressing Enter nor waiting appears to reliably surface a usable password
-prompt while the fingerprint prompt is active — this looks like it's
-about how `pam_fprintd`'s prompt is implemented (it's tied to the actual
-async USB verify call, not a normal text field reading your keystrokes),
-not a PAM ordering bug. Still being pinned down; if you find the actual
-reliable way to bail out to password, please open an issue.
+`system-auth`'s `auth` stack has `pam_fprintd.so` as `sufficient` *before*
+`pam_unix.so` (also `sufficient`) — the correct order for "try
+fingerprint, fall back to password on failure" — and this is identical
+for `sudo` and the polkit "authenticate to make changes" dialogs (both
+include `system-auth`).
+
+The fingerprint prompt isn't a normal text field, though — it's tied to
+the actual async USB verify call, so **pressing Enter does nothing**.
+To fall back to password: either **wait it out** (~30s, `pam_fprintd`
+times out and PAM moves on) or **press Ctrl+C**, which cancels the scan
+immediately and drops straight to the password prompt. Both confirmed
+working for `sudo`.
 
 ## Troubleshooting
 
