@@ -6,15 +6,23 @@
 set -euo pipefail
 
 LIBDIR="/usr/local/lib64/vfs0090"
-UNIT_DROPIN="/etc/systemd/system/fprintd.service.d/10-vfs0090-driver.conf"
+DROPIN_DIR="/etc/systemd/system/fprintd.service.d"
+UNIT_DROPIN="$DROPIN_DIR/10-vfs0090-driver.conf"
+BOOT_DROPIN="$DROPIN_DIR/20-boot-start.conf"
 
 log() { printf '\033[1;32m==>\033[0m %s\n' "$1"; }
 
-if [[ -f "$UNIT_DROPIN" ]]; then
-    log "Removing systemd drop-in..."
-    sudo rm -f "$UNIT_DROPIN"
-    sudo rmdir --ignore-fail-on-non-empty "$(dirname "$UNIT_DROPIN")" 2>/dev/null || true
+if [[ -f "$BOOT_DROPIN" ]]; then
+    log "Disabling fprintd boot-start..."
+    sudo systemctl disable fprintd 2>/dev/null || true
+    sudo rm -f "$BOOT_DROPIN"
 fi
+
+if [[ -f "$UNIT_DROPIN" ]]; then
+    log "Removing driver systemd drop-in..."
+    sudo rm -f "$UNIT_DROPIN"
+fi
+sudo rmdir --ignore-fail-on-non-empty "$DROPIN_DIR" 2>/dev/null || true
 
 if [[ -d "$LIBDIR" ]]; then
     log "Removing built library from $LIBDIR..."

@@ -9,8 +9,10 @@
 # exact-version-matched checkout of upstream libfprint, patches two
 # small compatibility bugs, and installs the result to /usr/local so it
 # never touches the RPM-owned system library. fprintd is then pointed at
-# it via a systemd drop-in (LD_LIBRARY_PATH), which is the only system
-# file this script modifies outside of /usr/local.
+# it via a systemd drop-in (LD_LIBRARY_PATH), and a second drop-in makes
+# it start at boot (see step 7 below for why) — those two drop-ins and
+# /usr/local are the only things this script touches outside its own
+# temp build directory.
 #
 set -euo pipefail
 
@@ -20,6 +22,7 @@ PREFIX="${VFS0090_PREFIX:-$HOME/.local/vfs0090}"
 LIBDIR="/usr/local/lib64/vfs0090"
 UNIT_DROPIN_DIR="/etc/systemd/system/fprintd.service.d"
 UNIT_DROPIN="$UNIT_DROPIN_DIR/10-vfs0090-driver.conf"
+BOOT_DROPIN="$UNIT_DROPIN_DIR/20-boot-start.conf"
 
 DRIVER_REPO="https://github.com/3v1n0/libfprint-tod-vfs0090.git"
 DRIVER_COMMIT="252c98495791839b36fe5154f55ecca62df2e76a"
@@ -128,8 +131,20 @@ log "Pointing fprintd at it via a systemd drop-in..."
 sudo mkdir -p "$UNIT_DROPIN_DIR"
 printf '[Service]\nEnvironment=LD_LIBRARY_PATH=%s\n' "$LIBDIR" | sudo tee "$UNIT_DROPIN" >/dev/null
 
+log "Making fprintd start at boot instead of purely on-demand..."
+# fprintd.service ships with no [Install] section (it's meant to be purely
+# D-Bus-activated). That's a problem for GDM specifically: the greeter
+# checks whether fprintd is *already running* to decide whether to offer
+# the fingerprint option, but doesn't itself trigger D-Bus activation and
+# doesn't retry. On a cold boot, nothing has touched fprintd yet at the
+# moment the greeter draws, so it silently falls back to password-only —
+# every single time, not intermittently. Giving the unit an [Install]
+# section via a drop-in and enabling it fixes this without touching any
+# PAM/polkit config.
+printf '[Install]\nWantedBy=graphical.target\n' | sudo tee "$BOOT_DROPIN" >/dev/null
+
 sudo systemctl daemon-reload
-sudo systemctl restart fprintd
+sudo systemctl enable --now fprintd
 
 # --- 8. Verify ------------------------------------------------------------------
 sleep 1

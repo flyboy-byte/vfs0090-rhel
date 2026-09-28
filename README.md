@@ -67,10 +67,20 @@ support compiled in either).
    directory, because `fprintd`'s systemd unit has `ProtectHome=true`,
    which makes `/home` invisible to the sandboxed process. `/usr/local`
    stays readable under `ProtectSystem=strict` (which only blocks writes).
+6. Enables `fprintd` to start at boot, via a second drop-in that gives
+   the unit an `[Install]` section (it ships without one — it's meant to
+   be purely D-Bus-activated). Without this, GDM's login screen will
+   *never* offer the fingerprint option on a fresh boot: it checks
+   whether `fprintd` is already running to decide whether to show the
+   prompt, but doesn't itself trigger D-Bus activation and doesn't
+   retry. On a cold boot nothing has touched `fprintd` yet at the moment
+   the greeter draws, so it silently falls back to password-only —
+   consistently, not intermittently. This doesn't touch PAM/polkit at
+   all, just makes the daemon warm earlier.
 
 None of this touches your system's `libfprint` RPM. A `dnf update` won't
-conflict with it, and uninstalling is a matter of removing one systemd
-drop-in and one directory (`uninstall.sh` does this).
+conflict with it, and uninstalling is a matter of removing two systemd
+drop-ins and one directory (`uninstall.sh` does this).
 
 ## Usage
 
@@ -106,6 +116,21 @@ already wires to `pam_fprintd.so`.
 
 Your enrolled fingerprints (`/var/lib/fprint`) are untouched by either
 script.
+
+## Known rough edges
+
+**No obvious way to fall back to typing your password.** `system-auth`'s
+`auth` stack has `pam_fprintd.so` as `sufficient` *before* `pam_unix.so`
+(also `sufficient`), which is the textbook-correct order for "try
+fingerprint, fall back to password on failure" — and this is confirmed
+identical for `sudo` and the polkit "authenticate to make changes"
+dialogs (both include `system-auth`). In practice, though, neither
+pressing Enter nor waiting appears to reliably surface a usable password
+prompt while the fingerprint prompt is active — this looks like it's
+about how `pam_fprintd`'s prompt is implemented (it's tied to the actual
+async USB verify call, not a normal text field reading your keystrokes),
+not a PAM ordering bug. Still being pinned down; if you find the actual
+reliable way to bail out to password, please open an issue.
 
 ## Troubleshooting
 
