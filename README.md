@@ -69,14 +69,15 @@ support compiled in either).
    stays readable under `ProtectSystem=strict` (which only blocks writes).
 6. Enables `fprintd` to start at boot, via a second drop-in that gives
    the unit an `[Install]` section (it ships without one — it's meant to
-   be purely D-Bus-activated). Without this, GDM's login screen will
-   *never* offer the fingerprint option on a fresh boot: it checks
-   whether `fprintd` is already running to decide whether to show the
-   prompt, but doesn't itself trigger D-Bus activation and doesn't
-   retry. On a cold boot nothing has touched `fprintd` yet at the moment
-   the greeter draws, so it silently falls back to password-only —
-   consistently, not intermittently. This doesn't touch PAM/polkit at
-   all, just makes the daemon warm earlier.
+   be purely D-Bus-activated). Without this, GDM's login screen won't
+   offer the fingerprint option: it doesn't trigger `fprintd`'s D-Bus
+   activation itself and doesn't retry, so if nothing has touched
+   `fprintd` yet at the moment the greeter draws, it silently falls back
+   to password-only. This doesn't touch PAM/polkit at all, just makes
+   the daemon start earlier. On a genuine cold boot this may take a
+   reboot or two to kick in reliably, likely because the USB sensor
+   itself also needs a moment to finish enumerating — see
+   Troubleshooting if it doesn't show up immediately.
 
 None of this touches your system's `libfprint` RPM. A `dnf update` won't
 conflict with it, and uninstalling is a matter of removing two systemd
@@ -162,6 +163,18 @@ has drifted further from what's pinned here. Compare against
 `patches/0002-vfs0090-driver-fixes.patch` — the same two categories of fix
 (missing `config.h`, missing `features` flag) are the most likely repeat
 offenders after a libfprint API change.
+
+**GDM login screen still doesn't offer fingerprint after installing** —
+confirm `sudo` and the lock screen (lock an already-running session,
+don't reboot) both accept a touch on the sensor first. If they do, the
+underlying driver/PAM setup is correct and this is specifically about
+GDM's greeter not finding `fprintd` warmed up in time on that boot —
+`systemctl status fprintd` should show `enabled`. In testing, a plain
+`sudo systemctl restart gdm` (fresh greeter, but USB stays enumerated
+from the running session) reliably showed the fingerprint option even
+when a full cold reboot right after installing didn't — try logging in
+via GDM a second time (a second boot, or restart GDM as above) before
+concluding it's actually broken.
 
 **Sensor was previously used with Windows Hello** — some reports suggest
 the sensor needs to be re-paired/initialized if Windows Hello was ever set
